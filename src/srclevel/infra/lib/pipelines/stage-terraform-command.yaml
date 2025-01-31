@@ -1,0 +1,64 @@
+# Reusable Terraform stage with variable command
+parameters:
+  - name: tfCommand
+    type: string
+    values: [validate, plan, apply]
+  - name: tfWorkspacePrefix
+    type: string
+  - name: tla
+    type: string
+  - name: tenants
+    type: object
+  - name: environment
+    type: string
+  - name: azRegion
+    type: string
+  - name: tfDirectory
+    type: string
+  - name: tfVariables
+    type: object
+  - name: tfEnvVar
+    type: object
+  - name: tfProviders
+    type: object
+
+stages:
+  - stage: ${{ parameters.tfCommand }}_${{ parameters.environment }}_${{ parameters.azRegion }}
+    displayName: ${{ upper(parameters.tfCommand) }}  ${{ upper(parameters.environment) }} ${{ upper(parameters.azRegion) }}
+    variables:
+      # Load variable groups for provider configuration:
+      - ${{ each tfProvider in parameters.tfProviders  }}:
+          - group: fdc-${{ tfProvider }}-provider-${{ parameters.environment }}
+    jobs:
+      - template: terraform/terraform-job.yaml@templates
+        parameters:
+          command: ${{ parameters.tfCommand }}
+          predeploy:
+            - template: ./steps-predeploy-terragrunt.yaml
+              parameters:
+                tfDirectory: ${{ parameters.tfDirectory }}
+          environment: ${{ parameters.environment }}
+          workspace: ${{ parameters.tfWorkspacePrefix }}-${{ parameters.tla }}-${{ parameters.environment }}-${{ parameters.azRegion }}
+          directory: ${{ parameters.tfDirectory }}
+          variables:
+            - name: TFC_TEAM_TOKEN # Required for Terraform Workspace authentication.
+              value: $(TFC_ACCESS_TOKEN) # Stored in the Library 'TerraformCloud'.
+            - name: TF_VAR_TLA # Required for azure resources naming convention
+              value: ${{ parameters.tla }}
+            - name: TF_VAR_ENV # Required for azure resources naming convention
+              value: ${{ parameters.environment }}
+            - name: TF_VAR_REGION # Required for azure resources naming convention
+              value: ${{ parameters.azRegion }}
+            - ${{ each var in parameters.tfVariables }}:
+                - ${{ var }}
+          envvar:
+            # Load secrets for provider configuration since needs to be explicitly passed:
+            # Ref: https://learn.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#reference-secret-variables-in-variable-groups
+            ${{ each tenant in parameters.tenants }}:
+              ${{ each tfProvider in parameters.tfProviders  }}:
+                ${{ if eq(tfProvider, 'commercetools') }}:
+                  TF_VAR_${{ upper(tenant) }}_CTP_CLIENT_SECRET: ${{ format('$(TF_VAR_{0}_CTP_CLIENT_SECRET)', upper(tenant)) }}
+                ${{ if eq(tfProvider, 'algolia') }}:
+                  TF_VAR_${{ upper(tenant) }}_ALGOLIA_API_KEY: ${{ format('$(TF_VAR_{0}_ALGOLIA_API_KEY)', upper(tenant)) }}
+              ${{ each envVar in parameters.tfEnvVar }}:
+                ${{ envVar.key }}: ${{ envVar.value }}
