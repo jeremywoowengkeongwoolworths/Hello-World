@@ -1,0 +1,21 @@
+name: $(date:yyyyMMdd)$(rev:.r)
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/srclevel/Hello-World
+extends:
+  template: /src/srclevel/infra/lib/pipelines/pipeline-app.yaml
+  parameters:
+    tla: OPH
+    sourcePath: src/srclevel/Hello-World
+    testPath: src/srclevel/Hello-World
+    appName: Hello-World
+    environment:
+      common:
+        Tenant: wnz
+        LOG_LEVEL: Debug
+      dev:
+        HttpClientConfiguration_UrlString: "https://ssak8saae.dev.wx-d.net/healthz"
