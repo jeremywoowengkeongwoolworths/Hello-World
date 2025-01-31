@@ -1,0 +1,53 @@
+parameters:
+  - name: tla
+    type: string
+    default: ""
+  - name: path
+    type: string
+    default: ""
+
+# If the calling pipeline has trigger config this gets ignored:
+trigger:
+  branches:
+    include:
+      - main
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform Engineering/vsts-build-templates
+      ref: master
+
+variables:
+  terraformVersion: latest # Required by terraform/terraform-job.yaml@templates.
+  fullPath: $(Build.SourcesDirectory)/${{ parameters.path }}
+
+stages:
+  - template: ./stage-validate-config.yaml
+    parameters:
+      tfDirectory: $(fullPath)
+
+  # DEV Stages:
+  - template: stage-terraform.yaml
+    parameters:
+      tla: ${{ parameters.tla }}
+      environment: dev
+      tfDirectory: $(fullPath)
+
+  # UAT Stages:
+  - template: stage-terraform.yaml
+    parameters:
+      tla: ${{ parameters.tla }}
+      environment: uat
+      tfDirectory: $(fullPath)
+
+  # PT Stages:
+  # - template: stage-terraform.yaml
+  #   parameters:
+  #     tla: ${{ parameters.tla }}
+  #     environment: pt
+  #     tfDirectory: $(fullPath)
+
+  # PROD Stages:
+  ## TBD
