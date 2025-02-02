@@ -1,0 +1,118 @@
+name: fdc-{{ requiredEnv "Tenant" }}-sample-app
+type: app
+
+runAsNonRoot: true
+
+alerts:
+  slackChannel: "#fdc-devs"
+
+# TODO: Register healthcheck endpoints in the app
+healthCheck:
+  enabled: true
+  path: /healthz 
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 200Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+workloadIdentity:
+ enabled: true
+
+environment:
+  # # infra/deployment settings
+  # - name: "Logging__LogLevel__Default"
+  #   value: "{{LOG_LEVEL}}"
+  # - name: TenantSettings__Id
+  #   value: "{{TenantSettings_Id}}"
+  # - name: TenantId
+  #   value: "{{Tenant}}"
+
+  # # app settings
+  # - name: ProcessInfo__AppType
+  #   value: "{{ProcessInfo_AppType}}"
+  # - name: ProcessInfo__Tenant
+  #   value: "{{ProcessInfo_Tenant}}"
+
+  # # process (tenant) settings
+  # - name: ProcessSettings__SalesOrg
+  #   value: "{{ProcessSettings_SalesOrg}}"
+  # - name: ProcessSettings__HierarchyId
+  #   value: "{{ProcessSettings_HierarchyId}}"  
+  # - name: ProcessSettings__ProductType
+  #   value: "{{ProcessSettings_ProductType}}"
+  # - name: ProcessSettings__TaxCategory
+  #   value: "{{ProcessSettings_TaxCategory}}"
+  # - name: ProcessSettings__MaxMessageRetries
+  #   value: "{{ProcessSettings_MaxMessageRetries}}"  
+  # - name: ProcessSettings__IsStagedPublisherEnabled
+  #   value: "{{ProcessSettings_IsStagedPublisherEnabled}}"
+  # - name: ProcessSettings__BatchSize
+  #   value: "{{ProcessSettings_BatchSize}}"
+
+  #   # commercetools settings
+  # - name: CommercetoolsApi__ClientId
+  #   valueFromExternalSecretKey: '{{ requiredEnv "ServiceName" }}-svc-ct-client-id'
+  # - name: CommercetoolsApi__ClientSecret
+  #   valueFromExternalSecretKey: '{{ requiredEnv "ServiceName" }}-svc-ct-client-secret'
+  # - name: CommercetoolsApi__ProjectKey
+  #   value: "{{CommercetoolsApi_ProjectKey}}"
+  # - name: CommercetoolsApi__Scope
+  #   value: "{{CommercetoolsApi_Scope}}"
+  # - name: CommercetoolsApi__ApiBaseAddress
+  #   value: "https://api.australia-southeast1.gcp.commercetools.com/"
+  # - name: CommercetoolsApi__AuthorizationBaseAddress
+  #   value: "https://auth.australia-southeast1.gcp.commercetools.com/"
+    
+  # # Event hub settings
+  # - name: EventHubSettings__EventHubFullyQualifiedNamespace
+  #   value: "{{EventHubSettings_EventHubFullyQualifiedNamespace}}"
+  # - name: EventHubSettings__FullEventHubDetails__EventHubName
+  #   value: "{{EventHubSettings_FullEventHubDetails_EventHubName}}"
+  # - name: EventHubSettings__FullEventHubDetails__EventHubConsumerGroup
+  #   value: "{{EventHubSettings_FullEventHubDetails_EventHubConsumerGroup}}"
+  # - name: EventHubSettings__DeltaEventHubDetails__EventHubName
+  #   value: "{{EventHubSettings_DeltaEventHubDetails_EventHubName}}"
+  # - name: EventHubSettings__DeltaEventHubDetails__EventHubConsumerGroup
+  #   value: "{{EventHubSettings_DeltaEventHubDetails_EventHubConsumerGroup}}"
+  # - name: EventHubSettings__ProcessFullEventhub
+  #   value: "{{EventHubSettings_ProcessFullEventhub}}"
+  # - name: EventHubSettings__ResetEventhubProcessing
+  #   value: "{{EventHubSettings_ResetEventhubProcessing}}"
+  # - name: EventHubSettings__PrimaryEventHub
+  #   value: "{{EventHubSettings_PrimaryEventHub}}"
+  # - name: EventHubSettings__MaximumBatchSize
+  #   value: "{{EventHubSettings_MaximumBatchSize}}"
+  # - name: EventHubSettings__BlobStoreContainerName
+  #   value: '{{ requiredEnv "ServiceName" }}-ehcp'
+  # - name: EventHubSettings__BlobStoreAccountUri
+  #   value: 'https://{{ requiredEnv "EventHubSettings_BlobStoreAccountName" }}.blob.core.windows.net'
+
+  # {{- if eq (requiredEnv "CommercetoolsApi_ProjectKey") "wwnz-dev" }}
+  # # Event hub settings for dev only
+  # - name: EventHubSettings__FullEventHubDetails__EventHubSharedAccessKeyName
+  #   value: "article-full-nz-common-listener"
+  # - name: EventHubSettings__FullEventHubDetails__EventHubSharedAccessKey
+  #   valueFromExternalSecretKey: '{{ requiredEnv "ServiceName" }}-svc-fulleventhub-accesskey-temp'
+  # - name: EventHubSettings__DeltaEventHubDetails__EventHubSharedAccessKeyName
+  #   value: "article-delta-3-nz-common-listener"
+  # - name: EventHubSettings__DeltaEventHubDetails__EventHubSharedAccessKey
+  #   valueFromExternalSecretKey: '{{ requiredEnv "ServiceName" }}-svc-deltaeventhub-accesskey-temp'
+  # {{- end }}
+  # - name: CacheSettings__HostName
+  #   value: "{{CacheSettings_HostName}}"
+  # - name: CacheSettings__CacheType
+  #   value: "{{CacheSettings_CacheType}}"
+  # - name: CacheSettings__CachePrefix
+  #   value: "{{CacheSettings_CachePrefix}}"
+    
+# keeping it simple for now, need to revisit
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+  - name: cpu
+    value: 65
