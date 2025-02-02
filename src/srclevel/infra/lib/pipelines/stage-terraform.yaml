@@ -1,0 +1,52 @@
+# Validate, Plan and Apply Terraform to certain environment
+parameters:
+  - name: tfWorkspacePrefix
+    type: string
+    default: az
+  - name: tla
+    type: string
+  - name: tenants
+    type: object
+    default: ["wnz", "bigw"]
+  - name: environment
+    type: string
+    values: [dev, uat, pt, prod]
+  - name: azRegion
+    type: string
+    default: aae
+  - name: tfDirectory
+    type: string
+  - name: tfVariables
+    type: object
+    default: {}
+  - name: tfEnvVar
+    type: object
+    default: {}
+  - name: tfProviders
+    type: object
+    default: ["algolia", "commercetools"]
+
+stages:
+  - ${{ if eq(parameters.environment, 'dev') }}:
+      - template: ./stage-terraform-command.yaml
+        parameters:
+          tfCommand: validate
+          ${{ each parameter in parameters }}:
+            ${{ parameter.Key }}: ${{ parameter.Value }}
+
+  - template: ./stage-terraform-command.yaml
+    parameters:
+      tfCommand: plan
+      ${{ each parameter in parameters }}:
+        ${{ parameter.Key }}: ${{ parameter.Value }}
+
+  # Apply only on main branch or branches starting with release:
+  - ? ${{ if or(
+      eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+      startsWith(variables['Build.SourceBranch'], 'refs/heads/release'
+      )) }}
+    : - template: ./stage-terraform-command.yaml
+        parameters:
+          tfCommand: apply
+          ${{ each parameter in parameters }}:
+            ${{ parameter.Key }}: ${{ parameter.Value }}
