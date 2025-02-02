@@ -1,0 +1,24 @@
+# Validate Configuration files
+parameters:
+  - name: tfDirectory
+    type: string
+
+stages:
+  - stage: validate_config
+    displayName: VALIDATE CONFIG
+    jobs:
+      - job: config_validate
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.x"
+              architecture: "x64"
+          - script: |
+              pip install yamale
+            displayName: Install Yamale
+          - script: |
+              yamale ${{ parameters.tfDirectory }}/metadata.yaml -s $(Build.SourcesDirectory)/infra/lib/terragrunt/metadata.schema.yaml
+            displayName: Validate metadata file
+          - script: |
+              yamale ${{ parameters.tfDirectory }}/config -s modules/input.schema.yaml
+            displayName: Validate config files
