@@ -1,0 +1,15 @@
+parameters:
+  - name: tfDirectory
+    type: string
+
+steps:
+  - script: |
+      wget https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_amd64
+      mv terragrunt_linux_amd64 terragrunt
+      chmod +x terragrunt
+      mv terragrunt /usr/local/bin
+    displayName: Install Terragrunt
+  - script: |
+      cd ${{ parameters.tfDirectory }}
+      terragrunt init -cloud=false
+    displayName: Terragrunt init
