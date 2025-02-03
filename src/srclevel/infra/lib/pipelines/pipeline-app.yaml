@@ -1,0 +1,175 @@
+parameters:
+  - name: tla
+    type: string
+  - name: sourcePath
+    type: string
+  - name: testPath
+    type: string
+  - name: environment
+    type: object
+  - name: appName
+    type: string
+  - name: workloadType
+    type: string
+    default: graph
+  - name: dotnetVersion
+    type: string
+    default: 8.0.x
+
+# If the calling pipeline has trigger config this gets ignored:
+trigger:
+  branches:
+    include:
+      - main
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform Engineering/vsts-build-templates
+
+variables:
+  - name: k8sNamespace
+    value: ${{ parameters.tla }}
+  - name: buildConfiguration
+    value: Release
+  - name: azureContainerRegistry
+    value: wowdevcontainers.azurecr.io
+  - name: workingDirectory
+    value: $(System.DefaultWorkingDirectory)/${{ parameters.sourcePath }}
+  - name: isPullRequest
+    value: $[eq(variables['Build.Reason'], 'PullRequest')]
+  - name: isRelease
+    value: $[or(startsWith(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/Release/'))]
+
+stages:
+  - stage: BuildAndTest
+    displayName: Build and Test
+    pool: wlx-ubuntu-latest
+    jobs:
+      - job: BuildTest
+        workspace:
+          clean: all
+        steps:
+          - checkout: self
+            clean: true
+          
+          - script: |
+             echo "build source branch"
+             echo $(Build.SourceBranch)
+
+          - template: dotnet/build-v2.yaml@templates
+            parameters:
+              preBuild:
+                - script: |
+                    NuGetConfig="$AGENT_TEMPDIRECTORY/NuGet.Config"
+                    echo "Writing temporary NuGet.Config to $NuGetConfig..."
+                    cat > $NuGetConfig << EOF
+                    <configuration>
+                      <packageSources>
+                        <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+                      </packageSources>
+                    </configuration>
+                    EOF
+
+                    dotnet workload update --configfile $NuGetConfig
+                    dotnet workload install aspire --configfile $NuGetConfig
+                  displayName: 'Install .NET Workloads'
+              # todo make it better, could not make it work .  adding upto 4 levels of folders for now
+              projects: |
+                ${{ parameters.sourcePath }}/*.*.*.*.csproj
+                ${{ parameters.testPath }}/*.*.*.*.csproj
+                ${{ parameters.sourcePath }}/*.*.*.csproj
+                ${{ parameters.testPath }}/*.*.*csproj
+                ${{ parameters.sourcePath }}/*.*.csproj
+                ${{ parameters.testPath }}/*.*csproj
+                ${{ parameters.sourcePath }}/*.csproj
+                ${{ parameters.testPath }}/*csproj
+              workingDirectory: $(workingDirectory)
+              appName: ${{parameters.appName}}
+              projectName: ${{parameters.appName}}
+              dotnetVersion: ${{parameters.dotnetVersion}}
+              runTests: true
+              testProjects: |
+                ${{ parameters.testPath }}/*.*.*.*.csproj
+                ${{ parameters.testPath }}/*.*.*csproj
+                ${{ parameters.testPath }}/*.*csproj
+                ${{ parameters.testPath }}/*csproj
+              publishTestCoverage: false
+              qualityGateEnabled: false
+              snykEnabled: true
+              sonarEnabled: true
+              runSnykCode: true
+
+          - ? ${{ if or(
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/feat/fdc-sample-app'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release'
+              )) }}
+            : - template: dotnet/publish-docker.yaml@templates
+                parameters:
+                  requiredDotnetPublish: false
+                  azureSubscriptionEndpoint: WOW-DEVTEST
+                  imageTag: "v$(Build.BuildId)"
+                  imageName: ${{parameters.appName}}
+                  azureContainerRegistry: $(azureContainerRegistry)
+                  dockerFile: $(workingDirectory)/Dockerfile
+                  appspecFile: $(workingDirectory)/appspec.yaml
+                  pushCondition: succeeded()
+                  scanEnabled: true
+                  orcaEnabled: true
+
+          - ? ${{ if or(
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/feat/fdc-sample-app'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release'
+              )) }}
+            : - template: deploy/generate-k8s-artifacts.yaml@templates
+                parameters:
+                  artifactName: ${{parameters.appName}}
+                  appspecFiles: $(workingDirectory)/appspec.yaml
+
+  - ? ${{ if or(
+      eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+      startsWith(variables['Build.SourceBranch'], 'refs/heads/feat/fdc-sample-app'),
+      startsWith(variables['Build.SourceBranch'], 'refs/heads/release'
+      )) }}
+    : - template: deploy/deploy-to-k8s.yaml@templates
+        parameters:
+          name: Deploy_DEV_AAE
+          artifactName: ${{parameters.appName}}
+          pool: wlx-ubuntu-latest
+          condition: succeeded()
+          displayName: Deploy DEV AAE
+          dependsOn: BuildAndTest
+          deployEnv: ${{parameters.appName}}
+          environment: dev
+          namespace: $(k8sNamespace)
+          region: aae
+          env:
+            ${{ each pair in parameters.environment.common }}:
+              ${{ pair.key }}: ${{ pair.value }}
+            ${{ each pair in parameters.environment.dev }}:
+              ${{ pair.key }}: ${{ pair.value }}
+
+  - ? ${{ if or(
+      eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+      startsWith(variables['Build.SourceBranch'], 'refs/heads/release'
+      )) }}
+    : - template: deploy/deploy-to-k8s.yaml@templates
+        parameters:
+          name: Deploy_UAT_AAE
+          artifactName: ${{parameters.appName}}
+          pool: wlx-ubuntu-latest
+          condition: succeeded()
+          displayName: Deploy UAT AAE
+          dependsOn: Deploy_DEV_AAE
+          deployEnv: ${{parameters.appName}}
+          environment: uat
+          namespace: $(k8sNamespace)
+          region: aae
+          env:
+            ${{ each pair in parameters.environment.common }}:
+              ${{ pair.key }}: ${{ pair.value }}
+            ${{ each pair in parameters.environment.uat }}:
+              ${{ pair.key }}: ${{ pair.value }}
